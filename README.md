@@ -1,2 +1,5 @@
 # DTSA5509-final-project
-final project of DTSA5509, University of Colorado Boulder
+
+1. [EDA]()
+2. [ML Model]()
+3. [Video]()

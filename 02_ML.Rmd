@@ -1,0 +1,140 @@
+---
+title: "Water Quality 02"
+author: "Jinwook Chang"
+output: 
+  html_document: 
+    theme: cosmo
+    df_print: kable
+    highlight: pygments
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(reticulate)
+use_python("/usr/bin/python3")
+```
+
+## Load required library
+
+### R
+
+```{r load_library_R, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(feather)
+library(glue)
+```
+
+### python
+
+```{python load_library_python}
+import pandas as pd
+import numpy as np
+import sklearn as sk
+```
+
+## Import Data
+
+```{r import_data}
+water <- read_feather("data/water_potability.feather")
+water <- na.omit(water)
+head(water)
+```
+
+## Split Data
+
+```{r}
+set.seed(46)
+
+water_split <- initial_split(water, prop = 0.75, strata = "Potability")
+train <- training(water_split)
+test <- testing(water_split)
+```
+
+## Data Pre processing
+
+```{r pre_process}
+rec <- recipe(Potability ~.,data = train) %>%
+    step_impute_mean(Sulfate, ph, Trihalomethanes) %>%  step_center(all_predictors()) %>% 
+  step_scale(all_predictors()) %>% 
+  prep(train)
+
+train <- bake(rec, train)
+test <- bake(rec, test)
+```
+
+## Modeling
+
+```{python transform}
+X_train = r.train.iloc[:, 0:9]
+X_test = r.test.iloc[:, 0:9]
+y_train = r.train.iloc[:, 9]
+y_test = r.test.iloc[:, 9]
+
+print(f"X_train : {X_train.shape} \ny_train : {y_train.shape}\nX_test : {X_test.shape}\ny_test : {y_test.shape}")
+```
+
+### Base Model
+
+```{python base_model}
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import confusion_matrix
+
+clf_dt = DecisionTreeClassifier()
+
+clf_dt.fit(X_train, y_train)
+
+pred_dt = clf_dt.predict(X_test)
+
+score_dt = np.mean(pred_dt == y_test)
+
+print(f"{round(100*score_dt,2)}%")
+print(confusion_matrix(y_true = y_test, y_pred = pred_dt))
+```
+
+Accuracy for Baseline model is about 62%, and according confusion matrix
+It is hard to figure out drinkable water (Potability is 1)
+
+### Model Develop
+
+```{r h2o model, eval=FALSE}
+library(h2o)
+h2o.init()
+
+h2o_train <- as.h2o(train, "train")
+h2o_test <- as.h2o(test, "test")
+
+y = "Potability"
+x = setdiff(names(train), "Potability")
+aml <- h2o.automl(x = x, y = y, training_frame = h2o_train,leaderboard_frame = h2o_test,max_runtime_secs = 300,exclude_algos = c("DeepLearning"))
+```
+
+```{r load h2o model, echo=FALSE, message=FALSE, warning=FALSE}
+library(h2o)
+h2o.init()
+
+h2o_train <- as.h2o(train, "train")
+h2o_test <- as.h2o(test, "test")
+model <- h2o.import_mojo("data/aml.mojo/StackedEnsemble_BestOfFamily_7_AutoML_1_20220203_110041.zip")
+```
+
+
+```{r predict model}
+y_pred <- as.data.frame(h2o.predict(model, h2o_test))
+
+result <- numeric(length(y_pred$predict))
+for (i in 1:length(result)) {
+  if(y_pred$p1[i] > 0.4895) { # Threshold
+    result[i] = 1
+  }
+}
+
+h2o.shutdown()
+
+print(glue("{round(mean(test$Potability == result)*100,2)}%"))
+
+
+```
+
+
+

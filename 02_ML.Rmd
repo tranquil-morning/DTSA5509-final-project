@@ -115,7 +115,7 @@ h2o.init()
 
 h2o_train <- as.h2o(train, "train")
 h2o_test <- as.h2o(test, "test")
-model <- h2o.import_mojo("data/aml.mojo/StackedEnsemble_BestOfFamily_7_AutoML_1_20220203_110041.zip")
+model <- h2o.import_mojo("data/aml.mojo/StackedEnsemble_BestOfFamily_7_AutoML_1_20220203_110041.zip", "model")
 ```
 
 
